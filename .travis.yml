@@ -1,0 +1,31 @@
+dist: xenial
+language: python
+
+stages:
+  - test
+  - deploy
+
+install: pip install tox
+script: tox
+
+jobs:
+  include:
+    - python: 3.6
+      env: TOXENV=py36
+    - python: 3.7
+      env: TOXENV=py37
+    - python: 3.8
+      env: TOXENV=py38
+    - stage: deploy
+      name: "Deploy to PyPI"
+      python: 3.8
+      install: pip install -U pip setuptools wheel
+      script: python setup.py sdist bdist_wheel
+      deploy:
+        provider: pypi
+        distributions: "sdist bdist_wheel"
+        user: __token__
+        on:
+          python: 3.8
+          tags: true
+          branch: master
