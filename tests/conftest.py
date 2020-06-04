@@ -24,19 +24,19 @@ def get_records(zone):
 
     def get_record(request, context, check=c):
         if check:
-            return [{
+            return {'result':[{
             '_ref': f'record:a/abcd/abc.{zone}/default',
             'name': 'abc',
             'canonical': f'example.{zone}',
             'use_ttl': False,
-            }]
+            }]}
         check.append('')
-        return [{
+        return {'result': [{
             '_ref': f'record:a/abcd/xyz.{zone}/default',
             'name': 'xyz',
             'ipv4addr': '192.168.0.1',
             'use_ttl': False,
-        }]
+        }]}
 
     return get_record
 

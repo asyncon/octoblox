@@ -25,6 +25,8 @@ jobs:
         provider: pypi
         distributions: "sdist bdist_wheel"
         user: __token__
+        password:
+          secure: kEQxFRcwFniar08p4vFIUlOjXU4NHFtyQtr7IxPzR8q9lcTlQF2WruWRfATGPQLg4kwYM16NfPJ3hPvJKb9wk4c7tqFR1rCO1xqCRTljY3G0JQhhyjtfWhu/kzZdyeQ/HEviQ0MNb30z3FgvW2wUdly7P6ihfPluYIS0o6mVtPh2DpIRG8V3U5IDfsh37g4qoYeC5xmdDMNJ0X/l3RKbd0qV5FLJGa/9S0ggXA5XEcOoPyIx8aqSMG9SXkrV/37VHAh6h2fzJCJznCh1+qM3FtrX+xHnLy5HrfayMsrLNF/UhKHDjCDVflB8g0Y6m0Xif7WziGxtpVuhKyeBKEDkxg9GNhlamxxaLlE78b+fGh9oT5239FVUNnr1dRB5i6JN9/kU6acMgyRo9b5Mk4Mo2YlGjODHKAgYA7H6xQCb7PqAprHfmg6zww0yKADiM/CIZIAHeIdGOkv1lB5mOVlvx34+N+zD0cWr/NWheSatvmgorwTNTkp2LpqwRv4pA78qsqs9gwdeH6aghdZOZYx+dPXt/ydXnX4F/H3Dh6VLOD5kuEVYFJQho1nxb0GK6IGjKEd7GGH+vD4+n2WDYlV4b+bHjYSsv+VHfhPVm1SheKrG3TQwqO+dpwPMGZckbw9e2nIALN+wmNQW+Els7WeK0C9+VdpSFdAlpGDUKVvDXFo=
         on:
           python: 3.8
           tags: true

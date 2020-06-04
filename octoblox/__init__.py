@@ -28,8 +28,8 @@ class InfoBlox(requests.Session):
         return ret
 
     def get_api_version(self):
-        res = self.get('?_schema',auth=self._auth)
-        self.apiver = res.json()['supported_versions'][-1]
+        res = self.get('?_schema')
+        self.apiver = '.'.join(sorted(list(map(int,v.split('.'))) for v in res.json()['supported_versions'])[-1])
         return self.apiver
 
     def get_zone(self, zone):
@@ -40,10 +40,16 @@ class InfoBlox(requests.Session):
         }).json()
 
     def get_records(self, type, fields, zone, default_ttl):
-        data = self.get('record:{0}'.format(type.lower()), params={
-            'zone': zone.rstrip('.'), '_return_fields+': ','.join(('ttl','use_ttl') + fields),
+        ret = self.get('record:{0}'.format(type.lower()), params={
+            'zone': zone.rstrip('.'),
+            '_return_fields+': ','.join(('ttl','use_ttl') + fields),
+            '_paging': 1, '_max_results': 1000, '_return_as_object': 1,
             **({'view': self.dns_view} if self.dns_view else {}),
         }).json()
+        data = ret['result']
+        while 'next_page_id' in ret:
+            ret = self.get('record:{0}'.format(type.lower()), params={'_page_id': ret['next_page_id']})
+            data += ret['result']
         dd = defaultdict(list)
         for d in data:
             dd[d['name']].append(d)
@@ -56,7 +62,7 @@ class InfoBloxProvider(BaseProvider):
 
     SUPPORTS_GEO = False
     SUPPORTS_DYNAMIC = False
-    SUPPORTS = set(('A', 'AAAA', 'CNAME', 'MX', 'PTR', 'SRV', 'TXT'))
+    SUPPORTS = set(('A', 'AAAA', 'CAA', 'CNAME', 'MX', 'PTR', 'SRV', 'TXT'))
 
     def __init__(
         self, id, gridmaster, username, password, verify=True, apiver=None,
@@ -87,13 +93,13 @@ class InfoBloxProvider(BaseProvider):
     def _data_for_TXT(self, zone, default_ttl):
         return self._data_for_multiple('TXT', 'text', zone, default_ttl)
 
-    # def _data_for_CAA(self, zone, default_ttl):
-    #     data = this.conn.get_records('CAA', ('ca_flag', 'ca_tag', 'ca_value'), zone, default_ttl)
-    #     return [(ttl, name, [{
-    #         'flags': v['ca_flag'],
-    #         'tag': v['ca_tag'],
-    #         'value': v['ca_value'],
-    #     } for v in values]) for ttl, name, values in data]
+    def _data_for_CAA(self, zone, default_ttl):
+        data = this.conn.get_records('CAA', ('ca_flag', 'ca_tag', 'ca_value'), zone, default_ttl)
+        return [(ttl, name, [{
+            'flags': v['ca_flag'],
+            'tag': v['ca_tag'],
+            'value': v['ca_value'],
+        } for v in values]) for ttl, name, values in data]
 
     def _data_for_single(self, type, keys, zone, default_ttl):
         data = self.conn.get_records(type, keys, zone, default_ttl)
@@ -116,19 +122,19 @@ class InfoBloxProvider(BaseProvider):
             'exchange': v['mail_exchanger'],
         } for v in values]) for ttl, name, values in data]
 
-    # def _data_for_NAPTR(self, zone, default_ttl):
-    #     data = self.conn.get_records('NAPTR', ('preference', 'mail_exchanger'), zone, default_ttl)
-    #     return [(ttl, name, [{
-    #         'order': v['order'],
-    #         'preference': v['preference'],
-    #         'flags': v['flags'],
-    #         'service': v['services'],
-    #         'regexp': v['regexp'],
-    #         'replacement': v['replacement'],
-    #     } for v in values]) for ttl, name, values in data]
+    def _data_for_NAPTR(self, zone, default_ttl):
+        data = self.conn.get_records('NAPTR', ('order', 'preference', 'flags', 'services', 'regexp', 'replacement'), zone, default_ttl)
+        return [(ttl, name, [{
+            'order': v['order'],
+            'preference': v['preference'],
+            'flags': v['flags'],
+            'service': v['services'],
+            'regexp': v['regexp'],
+            'replacement': v['replacement'],
+        } for v in values]) for ttl, name, values in data]
 
     def _data_for_SRV(self, zone, default_ttl):
-        data = self.conn.get_records('SRV', ('preference', 'mail_exchanger'), zone, default_ttl)
+        data = self.conn.get_records('SRV', ('priority', 'weight', 'port', 'target'), zone, default_ttl)
         return [(ttl, name, [{
             'priority': v['priority'],
             'weight': v['weight'],
