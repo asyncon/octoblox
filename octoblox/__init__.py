@@ -48,7 +48,7 @@ class InfoBlox(requests.Session):
         }).json()
         data = ret['result']
         while 'next_page_id' in ret:
-            ret = self.get('record:{0}'.format(type.lower()), params={'_page_id': ret['next_page_id']})
+            ret = self.get('record:{0}'.format(type.lower()), params={'_page_id': ret['next_page_id']}).json()
             data += ret['result']
         dd = defaultdict(list)
         for d in data:
@@ -62,7 +62,7 @@ class InfoBloxProvider(BaseProvider):
 
     SUPPORTS_GEO = False
     SUPPORTS_DYNAMIC = False
-    SUPPORTS = set(('A', 'AAAA', 'CAA', 'CNAME', 'MX', 'PTR', 'SRV', 'TXT'))
+    SUPPORTS = set(('A', 'AAAA', 'CAA', 'CNAME', 'MX', 'NAPTR', 'PTR', 'SRV', 'TXT'))
 
     def __init__(
         self, id, gridmaster, username, password, verify=True, apiver=None,
@@ -94,7 +94,7 @@ class InfoBloxProvider(BaseProvider):
         return self._data_for_multiple('TXT', 'text', zone, default_ttl)
 
     def _data_for_CAA(self, zone, default_ttl):
-        data = this.conn.get_records('CAA', ('ca_flag', 'ca_tag', 'ca_value'), zone, default_ttl)
+        data = self.conn.get_records('CAA', ('ca_flag', 'ca_tag', 'ca_value'), zone, default_ttl)
         return [(ttl, name, [{
             'flags': v['ca_flag'],
             'tag': v['ca_tag'],
