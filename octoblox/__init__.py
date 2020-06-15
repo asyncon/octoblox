@@ -1,8 +1,44 @@
+import sys
+import yaml
 import logging
 import requests
 from collections import defaultdict
 from octodns.provider.base import BaseProvider
 from octodns.record import Record
+
+single_types = {'ALIAS', 'CNAME', 'PTR'}
+type_map = {
+    'A': 'ipv4addr',
+    'AAAA': 'ipv6addr',
+    'ALIAS': 'target_name',
+    'CAA': {
+        'ca_flag': 'flags',
+        'ca_tag': 'tag',
+        'ca_value': 'value',
+    },
+    'CNAME': 'canonical',
+    'MX': {
+        'preference': 'preference',
+        'mail_exchanger': 'exchange',
+    },
+    'NAPTR': {
+        'order': 'order',
+        'preference': 'preference',
+        'flags': 'flags',
+        'services': 'service',
+        'regexp': 'regexp',
+        'replacement': 'replacement',
+    },
+    'NS': 'nameserver',
+    'PTR': 'ptrdname',
+    'SRV': {
+        'priority': 'priority',
+        'weight': 'weight',
+        'port': 'port',
+        'target': 'target',
+    },
+    'TXT': 'text',
+}
 
 
 class InfoBlox(requests.Session):
@@ -39,9 +75,9 @@ class InfoBlox(requests.Session):
             **({'view': self.dns_view} if self.dns_view else {}),
         }).json()
 
-    def get_records(self, type, fields, zone, default_ttl):
+    def get_records(self, type, fields, zone, default_ttl, **extra):
         ret = self.get('record:{0}'.format(type.lower()), params={
-            'zone': zone.rstrip('.'),
+            'zone': zone.rstrip('.'), **extra,
             '_return_fields+': ','.join(('ttl','use_ttl') + fields),
             '_paging': 1, '_max_results': 1000, '_return_as_object': 1,
             **({'view': self.dns_view} if self.dns_view else {}),
@@ -55,14 +91,33 @@ class InfoBlox(requests.Session):
             dd[d['name']].append(d)
         return [(rl[0]['ttl'] if rl[0]['use_ttl'] else default_ttl, n, [{
             k: v for k, v in r.items() if k in fields
-        } for r in rl]) for n, rl in dd.items() if rl]
+        } for r in rl], rl) for n, rl in dd.items() if rl]
+
+    def add_record(self, type, zone, name, **fields):
+        self.post(f'record:{type.lower()}', json={
+            'name': name,
+            'zone': zone,
+            **({'view': self.dns_view} if self.dns_view else {}),
+            **fields
+        }).raise_for_status()
+
+    def mod_record(self, src, ttl, default_ttl):
+        self.put(src['_ref'], json={
+            **{k: v for k, v in src.items() if k != '_ref'},
+            **{'use_ttl': ttl != default_ttl, 'ttl': ttl,},
+        }).raise_for_status()
+
+
+    def del_record(self, source):
+        for src in source:
+            self.delete(src['_ref']).raise_for_status()
 
 
 class InfoBloxProvider(BaseProvider):
 
     SUPPORTS_GEO = False
     SUPPORTS_DYNAMIC = False
-    SUPPORTS = set(('A', 'AAAA', 'CAA', 'CNAME', 'MX', 'NAPTR', 'PTR', 'SRV', 'TXT'))
+    SUPPORTS = {*type_map}
 
     def __init__(
         self, id, gridmaster, username, password, verify=True, apiver=None,
@@ -77,70 +132,18 @@ class InfoBloxProvider(BaseProvider):
             id, gridmaster, username, self.conn.apiver)
         super(InfoBloxProvider, self).__init__(id, *args, **kwargs)
 
-    def _data_for_multiple(self, type, key, zone, default_ttl):
-        data = self.conn.get_records(type, (key,), zone, default_ttl)
-        return [(ttl, name, [v[key] for v in values]) for ttl, name, values in data]
-
-    def _data_for_A(self, zone, default_ttl):
-        return self._data_for_multiple('A', 'ipv4addr', zone, default_ttl)
-
-    def _data_for_AAAA(self, zone, default_ttl):
-        return self._data_for_multiple('AAAA', 'ipv6addr', zone, default_ttl)
-
-    # def _data_for_NS(self, zone, default_ttl):
-    #     return self._data_for_multiple('NS', 'nameserver', zone, default_ttl)
-
-    def _data_for_TXT(self, zone, default_ttl):
-        return self._data_for_multiple('TXT', 'text', zone, default_ttl)
-
-    def _data_for_CAA(self, zone, default_ttl):
-        data = self.conn.get_records('CAA', ('ca_flag', 'ca_tag', 'ca_value'), zone, default_ttl)
-        return [(ttl, name, [{
-            'flags': v['ca_flag'],
-            'tag': v['ca_tag'],
-            'value': v['ca_value'],
-        } for v in values]) for ttl, name, values in data]
-
-    def _data_for_single(self, type, keys, zone, default_ttl):
-        data = self.conn.get_records(type, keys, zone, default_ttl)
-        return [(t, n, rl[0][list(rl[0])[0]]+'.') for t, n, rl in data]
-        # return data[0][ret[list(ret)[0]]]
-
-    # def _data_for_ALIAS(self, zone, default_ttl):
-    #     return self._data_for_single('ALIAS', ('',), zone, default_ttl)
-
-    def _data_for_CNAME(self, zone, default_ttl):
-        return self._data_for_single('CNAME', ('canonical',), zone, default_ttl)
-
-    def _data_for_PTR(self, zone, default_ttl):
-        return self._data_for_single('PTR', ('ptrdname',), zone, default_ttl)
-
-    def _data_for_MX(self, zone, default_ttl):
-        data = self.conn.get_records('MX', ('preference', 'mail_exchanger'), zone, default_ttl)
-        return [(ttl, name, [{
-            'preference': v['preference'],
-            'exchange': v['mail_exchanger'],
-        } for v in values]) for ttl, name, values in data]
-
-    def _data_for_NAPTR(self, zone, default_ttl):
-        data = self.conn.get_records('NAPTR', ('order', 'preference', 'flags', 'services', 'regexp', 'replacement'), zone, default_ttl)
-        return [(ttl, name, [{
-            'order': v['order'],
-            'preference': v['preference'],
-            'flags': v['flags'],
-            'service': v['services'],
-            'regexp': v['regexp'],
-            'replacement': v['replacement'],
-        } for v in values]) for ttl, name, values in data]
-
-    def _data_for_SRV(self, zone, default_ttl):
-        data = self.conn.get_records('SRV', ('priority', 'weight', 'port', 'target'), zone, default_ttl)
-        return [(ttl, name, [{
-            'priority': v['priority'],
-            'weight': v['weight'],
-            'port': v['port'],
-            'target': v['target'],
-        } for v in values]) for ttl, name, values in data]
+    def _data_for(self, type, zone, default_ttl):
+        spec = type_map[type]
+        single_field = isinstance(spec, str)
+        fields = (spec,) if single_field else (*spec,)
+        data = self.conn.get_records(type, fields, zone, default_ttl)
+        return [(ttl, name, source,
+            values[0][spec]+'.' if type in single_types else [
+                v[spec] if single_field else 
+                {k: v[vk] for vk, k in spec.items()}
+                for v in values
+            ]
+        ) for ttl, name, values, source in data]
 
     def populate(self, zone, target=False, lenient=False):
         '''
@@ -173,17 +176,84 @@ class InfoBloxProvider(BaseProvider):
         default_ttl = zone_data[0]['soa_default_ttl']
 
         for _type in sorted(self.SUPPORTS):
-            data_for = getattr(self, '_data_for_{}'.format(_type))
-            for t, n, v in data_for(zone.name, default_ttl):
+            for t, n, s, v in self._data_for(_type, zone.name, default_ttl):
                 record_name = zone.hostname_from_fqdn(n)
                 record = Record.new(zone, record_name, {
                     'ttl': t,
                     'type': _type,
                     'values' if isinstance(v, list) else 'value': v
-                }, source=self, lenient=lenient)
+                }, source=s, lenient=lenient)
                 zone.add_record(record, lenient=lenient)
 
         return True
 
+    def _apply_Create(self, zone, change, default_ttl):
+        new = change.new
+        type = new._type
+        spec = type_map[type]
+        single_field = isinstance(spec, str)
+        values = [new.value] if type in single_types else new.values
+        fields = (spec,) if single_field else (*spec,)
+        for value in values:
+            self.conn.add_record(type, zone, new.name,
+                ttl=new.ttl,
+                use_ttl=new.ttl!=default_ttl,
+                **(
+                    {spec: value.rstrip('.')} if type in single_types else
+                    {spec: value} if single_field else 
+                    {vk: getattr(value, k) for vk, k in spec.items()}
+                )
+            )
+
+    def _apply_Delete(self, zone, change, default_ttl):
+        self.conn.del_record(change.existing.source)
+
+    def _apply_Update(self, zone, change, default_ttl):
+        e = change.existing
+        # # print(yaml.dump(e), file=sys.stderr)
+        # # print(yaml.dump(change), file=sys.stderr)
+        print(yaml.dump({e.fqdn:{a:getattr(e,a) for a in ('name','_type','ttl','data')}}, sort_keys=False), file=sys.stderr)
+        n = change.new
+        print(yaml.dump({n.fqdn:{a:getattr(n,a) for a in ('name','_type','ttl','data')}}, sort_keys=False), file=sys.stderr)
+
+        existing = change.existing
+        new = change.new
+        type = new._type
+        update = type in single_types or existing.ttl != new.ttl
+        spec = type_map[type]
+        single_field = isinstance(spec, str)
+        values = [new.value] if type in single_types else new.values
+        evalues = [existing.value,] if type in single_types else existing.values
+        fields = (spec,) if single_field else (*spec,)
+        for value in values:
+            if value in evalues:
+                if update:
+                    self.conn.mod_record(existing.source[evalues.index(value)], new.ttl, default_ttl)
+            else:
+                self.conn.add_record(type, zone, new.name,
+                    ttl=new.ttl,
+                    use_ttl=new.ttl!=default_ttl,
+                    **(
+                        {spec: value.rstrip('.')} if type in single_types else
+                        {spec: value} if single_field else 
+                        {vk: getattr(value, k) for vk, k in spec.items()}
+                    )
+                )
+        self.conn.del_record(existing.source[i] for i, value in enumerate(evalues) if value not in values)
+
     def _apply(self, plan):
-        pass
+
+        zone = plan.desired.name[:-1]
+
+        zone_data = self.conn.get_zone(zone)
+
+        if not zone_data:
+            if target:
+                raise ValueError("Zone does not exist in InfoBlox: {0}".format(zone.name))
+            return False
+
+        default_ttl = zone_data[0]['soa_default_ttl']
+
+        for change in plan.changes:
+            class_name = change.__class__.__name__
+            getattr(self, '_apply_{}'.format(class_name))(zone, change, default_ttl)
