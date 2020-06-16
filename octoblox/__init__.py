@@ -1,8 +1,7 @@
-# import sys
-# import yaml
 import logging
 import requests
 from collections import defaultdict
+from functools import lru_cache
 from octodns.provider.base import BaseProvider
 from octodns.record import Record
 
@@ -44,7 +43,7 @@ type_map = {
 class InfoBlox(requests.Session):
     """Encapsulates all traffic with the InfoBlox WAPI"""
 
-    def __init__(self, fqdn, username, password, verify=True, apiver=None, dns_view=None, network_view=None):
+    def __init__(self, fqdn, username, password, verify=True, apiver=None, dns_view=None, network_view=None, log=None):
         super(InfoBlox, self).__init__()
         self.fqdn = fqdn
         self.auth = (username, password)
@@ -52,6 +51,7 @@ class InfoBlox(requests.Session):
         self.network_view = network_view
         self.verify = verify
         self.apiver = apiver or '1.0'
+        self.log = log
         if not apiver:
             self.get_api_version()
 
@@ -59,13 +59,17 @@ class InfoBlox(requests.Session):
         return url if url.startswith('https://') else 'https://{0.fqdn}/wapi/v{0.apiver}/{1}'.format(self, url)
 
     def request(self, method, url, **kwargs):
-        return super(InfoBlox, self).request(method, self.url(url),**kwargs)
-        ret.raise_for_status()
+        ret = super(InfoBlox, self).request(method, self.url(url),**kwargs)
+        try:
+            ret.raise_for_status()
+        except requests.HTTPError:
+            self.log.error('InfoBlox.request: %d %s %s %r %s', ret.status_code, method, url, kwargs, ret.text)
+            raise
         return ret
 
     def get_api_version(self):
         res = self.get('?_schema')
-        self.apiver = '.'.join(sorted(list(map(int,v.split('.'))) for v in res.json()['supported_versions'])[-1])
+        self.apiver = '.'.join(map(str,sorted(list(map(int,v.split('.'))) for v in res.json()['supported_versions'])[-1]))
         return self.apiver
 
     def get_zone(self, zone):
@@ -78,7 +82,7 @@ class InfoBlox(requests.Session):
     def get_records(self, type, fields, zone, default_ttl, **extra):
         ret = self.get('record:{0}'.format(type.lower()), params={
             'zone': zone.rstrip('.'), **extra,
-            '_return_fields+': ','.join(('ttl','use_ttl') + fields),
+            '_return_fields+': ','.join((() if type == 'NS' else ('ttl','use_ttl') ) + fields),
             '_paging': 1, '_max_results': 1000, '_return_as_object': 1,
             **({'view': self.dns_view} if self.dns_view else {}),
         }).json()
@@ -95,29 +99,27 @@ class InfoBlox(requests.Session):
 
     def add_record(self, type, zone, name, **fields):
         self.post(f'record:{type.lower()}', json={
-            'name': name,
-            'zone': zone,
+            'name': f'{name}.{zone}',
             **({'view': self.dns_view} if self.dns_view else {}),
             **fields
-        }).raise_for_status()
+        })
 
     def mod_record(self, src, ttl, default_ttl):
         self.put(src['_ref'], json={
             **{k: v for k, v in src.items() if k != '_ref'},
-            **{'use_ttl': ttl != default_ttl, 'ttl': ttl,},
-        }).raise_for_status()
-
+            **({} if type == 'NS' else {'use_ttl': ttl != default_ttl, 'ttl': ttl,}),
+        })
 
     def del_record(self, source):
         for src in source:
-            self.delete(src['_ref']).raise_for_status()
+            self.delete(src['_ref'])
 
 
 class InfoBloxProvider(BaseProvider):
 
     SUPPORTS_GEO = False
     SUPPORTS_DYNAMIC = False
-    SUPPORTS = {*type_map}
+    # SUPPORTS = {*type_map}
 
     def __init__(
         self, id, gridmaster, username, password, verify=True, apiver=None,
@@ -125,12 +127,17 @@ class InfoBloxProvider(BaseProvider):
     ):
         self.log = logging.getLogger('{}[{}]'.format(
             self.__class__.__name__, id))
-        self.conn = InfoBlox(gridmaster, username, password, verify, apiver, dns_view, network_view)
-        self.conn.log = self.log
+        self.conn = InfoBlox(gridmaster, username, password, verify, apiver, dns_view, network_view, self.log)
         self.log.debug(
             '__init__: id=%s, gridmaster=%s, username=%s, apiver=%s',
             id, gridmaster, username, self.conn.apiver)
         super(InfoBloxProvider, self).__init__(id, *args, **kwargs)
+
+    @property
+    @lru_cache(1)
+    def SUPPORTS(self):
+        supported_objects = self.conn.get('?_schema').json()['supported_objects']
+        return {t for t in type_map if f'record:{t.lower()}' in supported_objects}
 
     def _data_for(self, type, zone, default_ttl):
         spec = type_map[type]
@@ -209,13 +216,6 @@ class InfoBloxProvider(BaseProvider):
         self.conn.del_record(change.existing.source)
 
     def _apply_Update(self, zone, change, default_ttl):
-        # e = change.existing
-        # # print(yaml.dump(e), file=sys.stderr)
-        # # print(yaml.dump(change), file=sys.stderr)
-        # print(yaml.dump({e.fqdn:{a:getattr(e,a) for a in ('name','_type','ttl','data')}}, sort_keys=False), file=sys.stderr)
-        # n = change.new
-        # print(yaml.dump({n.fqdn:{a:getattr(n,a) for a in ('name','_type','ttl','data')}}, sort_keys=False), file=sys.stderr)
-
         existing = change.existing
         new = change.new
         type = new._type

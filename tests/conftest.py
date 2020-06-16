@@ -13,6 +13,26 @@ def zone_name():
 
 
 @pytest.fixture
+def schema():
+    return (f'/wapi/v1.0/?_schema', {
+        'supported_versions': ['1.0'],
+        'supported_objects': [
+            'record:a',
+            'record:aaaa',
+            'record:alias',
+            'record:caa',
+            'record:cname',
+            'record:mx',
+            'record:naptr',
+            'record:ns',
+            'record:ptr',
+            'record:srv',
+            'record:txt',
+        ]
+    })
+
+
+@pytest.fixture
 def zones(zone_name):
     return (f'/wapi/v1.0/zone_auth?fqdn={zone_name[:-1]}', [{
         '_ref': f'zone_auth/abcd/{zone_name[:-1]}/default',
@@ -55,5 +75,6 @@ def records(zone_name):
 
 
 @pytest.fixture
-def provider():
-    return InfoBloxProvider('test', 'non.existent', 'username', 'password', apiver='1.0')
+def provider(requests_mock, schema):
+    requests_mock.get(schema[0], json=schema[1])
+    return InfoBloxProvider('test', 'non.existent', 'username', 'password')

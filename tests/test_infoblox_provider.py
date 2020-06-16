@@ -7,15 +7,16 @@ from octodns.provider.yaml import YamlProvider
 from octodns.zone import Zone
 
 
-def test_zone_data(provider, requests_mock, zone_name, zones, records):
-    expected = Zone(zone_name, [])
-    source = YamlProvider('test', os.path.join(os.path.dirname(__file__), 'config'))
-    source.populate(expected)
+def test_zone_data(provider, requests_mock, zone_name, zones, records, schema):
+    requests_mock.get(zones[0], json=zones[1])
     requests_mock.get(zones[0], json=zones[1])
     requests_mock.get(records[0], json=records[1])
     requests_mock.delete(records[0], status_code=200)
     requests_mock.post(records[0], status_code=201)
     requests_mock.put(records[0], status_code=200)
+    expected = Zone(zone_name, [])
+    source = YamlProvider('test', os.path.join(os.path.dirname(__file__), 'config'))
+    source.populate(expected)
     zone = Zone(zone_name, [])
     provider.populate(zone)
     assert len(zone.records) == 3
