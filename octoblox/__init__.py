@@ -1,5 +1,5 @@
-import sys
-import yaml
+# import sys
+# import yaml
 import logging
 import requests
 from collections import defaultdict
@@ -209,24 +209,26 @@ class InfoBloxProvider(BaseProvider):
         self.conn.del_record(change.existing.source)
 
     def _apply_Update(self, zone, change, default_ttl):
-        e = change.existing
+        # e = change.existing
         # # print(yaml.dump(e), file=sys.stderr)
         # # print(yaml.dump(change), file=sys.stderr)
-        print(yaml.dump({e.fqdn:{a:getattr(e,a) for a in ('name','_type','ttl','data')}}, sort_keys=False), file=sys.stderr)
-        n = change.new
-        print(yaml.dump({n.fqdn:{a:getattr(n,a) for a in ('name','_type','ttl','data')}}, sort_keys=False), file=sys.stderr)
+        # print(yaml.dump({e.fqdn:{a:getattr(e,a) for a in ('name','_type','ttl','data')}}, sort_keys=False), file=sys.stderr)
+        # n = change.new
+        # print(yaml.dump({n.fqdn:{a:getattr(n,a) for a in ('name','_type','ttl','data')}}, sort_keys=False), file=sys.stderr)
 
         existing = change.existing
         new = change.new
         type = new._type
-        update = type in single_types or existing.ttl != new.ttl
+        update = existing.ttl != new.ttl
         spec = type_map[type]
         single_field = isinstance(spec, str)
         values = [new.value] if type in single_types else new.values
         evalues = [existing.value,] if type in single_types else existing.values
         fields = (spec,) if single_field else (*spec,)
         for value in values:
-            if value in evalues:
+            if type in single_types:
+                self.conn.mod_record(existing.source[0], new.ttl, default_ttl)
+            elif value in evalues:
                 if update:
                     self.conn.mod_record(existing.source[evalues.index(value)], new.ttl, default_ttl)
             else:
