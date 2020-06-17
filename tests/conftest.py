@@ -1,6 +1,4 @@
 import re
-# import sys
-# import yaml
 import pytest
 from urllib.parse import urlparse
 from requests_mock import ANY
@@ -75,6 +73,11 @@ def records(zone_name):
 
 
 @pytest.fixture
-def provider(requests_mock, schema):
+def provider(requests_mock, zones, records, schema):
     requests_mock.get(schema[0], json=schema[1])
-    return InfoBloxProvider('test', 'non.existent', 'username', 'password')
+    requests_mock.get(zones[0], json=zones[1])
+    requests_mock.get(records[0], json=records[1])
+    requests_mock.delete(records[0], status_code=200)
+    requests_mock.post(records[0], status_code=201)
+    requests_mock.put(records[0], status_code=200)
+    return InfoBloxProvider('test', 'non.existent', 'username', 'password', log_change=True)

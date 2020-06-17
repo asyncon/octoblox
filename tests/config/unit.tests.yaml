@@ -4,6 +4,7 @@ a:
   type: A
   value: 1.2.3.4
 cname:
+  ttl: 28800
   type: CNAME
   value: example2.unit.tests.
 www:
