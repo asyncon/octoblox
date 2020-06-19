@@ -195,11 +195,11 @@ class InfoBloxProvider(BaseProvider):
             for t, n, s, v in self._data_for(_type, zone.name, default_ttl):
                 record_name = zone.hostname_from_fqdn(n)
                 record = Record.new(zone, record_name, {
-                    # '_refs': s,
                     'ttl': t,
                     'type': _type,
                     'values' if isinstance(v, list) else 'value': v
-                }, source=s, lenient=lenient)
+                }, source=self, lenient=lenient)
+                record.refs = s
                 zone.add_record(record, lenient=lenient)
 
         return True
@@ -212,7 +212,7 @@ class InfoBloxProvider(BaseProvider):
             self.conn.add_record(type, zone, new.name, value, new.ttl, default_ttl)
 
     def _apply_Delete(self, zone, change, default_ttl):
-        self.conn.del_record(change.existing.source)
+        self.conn.del_record(change.existing.refs)
 
     def _apply_Update(self, zone, change, default_ttl):
         ext = change.existing
@@ -223,14 +223,14 @@ class InfoBloxProvider(BaseProvider):
         evalues = [ext.value,] if type in single_types else ext.values
         for value in values:
             if type in single_types:
-                self.conn.mod_record(type, ext.source[0], value, new.ttl, default_ttl)
+                self.conn.mod_record(type, ext.refs[0], value, new.ttl, default_ttl)
             elif value in evalues:
                 if update:
-                    self.conn.mod_record(type, ext.source[evalues.index(value)], value, new.ttl, default_ttl)
+                    self.conn.mod_record(type, ext.refs[evalues.index(value)], value, new.ttl, default_ttl)
             else:
                 self.conn.add_record(type, zone, new.name, value, new.ttl, default_ttl)
         if type not in single_types:
-            self.conn.del_record(ext.source[i] for i, value in enumerate(evalues) if value not in values)
+            self.conn.del_record(ext.refs[i] for i, value in enumerate(evalues) if value not in values)
 
     def _apply(self, plan):
 
