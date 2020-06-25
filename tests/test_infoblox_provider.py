@@ -1,7 +1,4 @@
 import os
-from conftest import ANY, pytest
-from requests_mock import ANY
-
 from octodns.provider.yaml import YamlProvider
 from octodns.zone import Zone
 
@@ -13,6 +10,5 @@ def test_zone_data(provider, zone_name):
     zone = Zone(zone_name, [])
     provider.populate(zone)
     assert len(zone.records) == 3
-    changes = expected.changes(zone, provider)
     plan = provider.plan(expected)
     provider.apply(plan)

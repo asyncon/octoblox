@@ -8,6 +8,9 @@ pytest = "*"
 pytest-cov = "*"
 requests-mock = "*"
 octoblox = {editable = true, path = "."}
+black = "*"
+flake8 = "*"
+flake8-bugbear = "*"
 
 [packages]
 requests = "*"
@@ -15,3 +18,6 @@ octodns = "*"
 
 [requires]
 python_version = "3.8"
+
+[pipenv]
+allow_prereleases = true
