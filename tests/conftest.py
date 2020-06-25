@@ -63,6 +63,29 @@ def get_records(zone):
                 'use_ttl': False,
             },
         ],
+        'ALIAS': [
+            {
+                '_ref': f'record:a/als1/alias-update.{zone}/default',
+                'name': 'alias-update',
+                'target_name': f'xyz.{zone}',
+                'target_type': 'A',
+                'use_ttl': False,
+            },
+            {
+                '_ref': f'record:a/als2/alias-update.{zone}/default',
+                'name': 'alias-update',
+                'target_name': f'xyz.{zone}',
+                'target_type': 'TXT',
+                'use_ttl': False,
+            },
+            {
+                '_ref': f'record:a/als3/alias-delete.{zone}/default',
+                'name': 'alias-delete',
+                'target_name': f'foo.{zone}',
+                'target_type': 'A',
+                'use_ttl': False,
+            },
+        ],
         'CNAME': [
             {
                 '_ref': f'record:cname/abcd/cname.{zone}/default',

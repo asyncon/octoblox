@@ -1,6 +1,9 @@
 import os
+import logging
 from octodns.provider.yaml import YamlProvider
 from octodns.zone import Zone
+
+logging.basicConfig()
 
 
 def test_zone_data(provider, zone_name):
@@ -9,6 +12,6 @@ def test_zone_data(provider, zone_name):
     source.populate(expected)
     zone = Zone(zone_name, [])
     provider.populate(zone)
-    assert len(zone.records) == 3
+    assert len(zone.records) == 5
     plan = provider.plan(expected)
     provider.apply(plan)

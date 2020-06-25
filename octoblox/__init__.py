@@ -20,7 +20,7 @@ dot_fields = {
 type_map = {
     'A': 'ipv4addr',
     'AAAA': 'ipv6addr',
-    'ALIAS': 'target_name',
+    'ALIAS': ['target_name', 'target_type'],
     'CAA': {
         'ca_flag': 'flags',
         'ca_tag': 'tag',
@@ -63,7 +63,7 @@ class InfoBlox(requests.Session):
         verify=True,
         apiver=None,
         dns_view=None,
-        network_view=None,
+        alias_types=None,
         log_change=False,
         log=None,
     ):
@@ -71,7 +71,7 @@ class InfoBlox(requests.Session):
         self.fqdn = fqdn
         self.auth = (username, password)
         self.dns_view = dns_view
-        self.network_view = network_view
+        self.alias_types = {*alias_types} if alias_types else {'A', 'AAAA'}
         self.verify = verify
         self.apiver = apiver or '1.0'
         self.log_change = log_change
@@ -84,7 +84,7 @@ class InfoBlox(requests.Session):
 
     def request(self, method, url, **kwargs):
         if self.log_change and method not in ('GET', 'HEAD'):
-            self.log.info(f'{method} {url} {kwargs}')
+            print(f'{method} {url} {kwargs}')
         ret = super().request(method, self.url(url), **kwargs)
         try:
             ret.raise_for_status()
@@ -163,7 +163,9 @@ class InfoBlox(requests.Session):
         single_field = isinstance(spec, str)
         return {
             **(
-                {spec: value[:-1]}
+                value
+                if type == 'ALIAS'
+                else {spec: value[:-1]}
                 if type in dot_types
                 else {spec: value}
                 if single_field
@@ -211,7 +213,7 @@ class InfoBloxProvider(BaseProvider):
         verify=True,
         apiver=None,
         dns_view=None,
-        network_view=None,
+        alias_types=None,
         log_change=False,
         *args,
         **kwargs,
@@ -224,7 +226,7 @@ class InfoBloxProvider(BaseProvider):
             verify,
             apiver,
             dns_view,
-            network_view,
+            alias_types,
             log_change,
             self.log,
         )
@@ -249,7 +251,13 @@ class InfoBloxProvider(BaseProvider):
                 ttl,
                 name,
                 source,
-                values[0][spec]
+                (
+                    values[0][spec[0]]
+                    if {v[spec[1]] for v in values} == self.conn.alias_types
+                    else 'example.com.'
+                )
+                if type == 'ALIAS'
+                else values[0][spec]
                 if type in single_types
                 else [
                     v[spec] if single_field else {k: v[vk] for vk, k in spec.items()}
@@ -275,15 +283,15 @@ class InfoBloxProvider(BaseProvider):
 
         default_ttl = zone_data[0]['soa_default_ttl']
 
-        for _type in sorted(self.SUPPORTS):
-            for t, n, s, v in self._data_for(_type, zone.name, default_ttl):
+        for type in sorted(self.SUPPORTS):
+            for t, n, s, v in self._data_for(type, zone.name, default_ttl):
                 record_name = zone.hostname_from_fqdn(n)
                 record = Record.new(
                     zone,
                     record_name,
                     {
                         'ttl': t,
-                        'type': _type,
+                        'type': type,
                         'values' if isinstance(v, list) else 'value': v,
                     },
                     source=self,
@@ -299,7 +307,13 @@ class InfoBloxProvider(BaseProvider):
         type = new._type
         values = [new.value] if type in single_types else new.values
         for value in values:
-            self.conn.add_record(type, zone, new.name, value, new.ttl, default_ttl)
+            if type == 'ALIAS':
+                spec = type_map[type]
+                for t in self.conn.alias_types:
+                    v = {spec[0]: value, spec[1]: t}
+                    self.conn.add_record(type, zone, new.name, v, new.ttl, default_ttl)
+            else:
+                self.conn.add_record(type, zone, new.name, value, new.ttl, default_ttl)
 
     def _apply_Delete(self, zone, change, default_ttl):
         self.conn.del_record(change.existing.refs)
@@ -312,7 +326,20 @@ class InfoBloxProvider(BaseProvider):
         values = [new.value] if type in single_types else new.values
         evalues = [ext.value,] if type in single_types else ext.values
         for value in values:
-            if type in single_types:
+            if type == 'ALIAS':
+                spec = type_map[type]
+                refs = {r[spec[1]]: r for r in ext.refs}
+                for t in self.conn.alias_types - {*refs}:
+                    v = {spec[0]: value, spec[1]: t}
+                    self.conn.add_record(type, zone, new.name, v, new.ttl, default_ttl)
+                for t in self.conn.alias_types & {*refs}:
+                    if refs[t][spec[0]] != value:
+                        v = {spec[0]: value, spec[1]: t}
+                        self.conn.mod_record(type, refs[t], v, new.ttl, default_ttl)
+                self.conn.del_record(
+                    r for t, r in refs.items() if t not in self.conn.alias_types
+                )
+            elif type in single_types:
                 self.conn.mod_record(type, ext.refs[0], value, new.ttl, default_ttl)
             elif value in evalues:
                 if update:

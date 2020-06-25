@@ -21,4 +21,8 @@ providers:
     # apiver: 1.0
     # dns_view: default
     # log_change: true
+    # alias_types:
+    #   - A
+    #   - AAAA
+    #   - TXT
 ```
