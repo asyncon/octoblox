@@ -3,7 +3,7 @@ import logging
 from octodns.provider.yaml import YamlProvider
 from octodns.zone import Zone
 
-logging.basicConfig()
+logging.basicConfig(level='INFO')
 
 
 def test_zone_data(provider, zone_name):
