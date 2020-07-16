@@ -35,6 +35,11 @@ providers:
     #   - A
     #   - AAAA
     #   - TXT
+    # create_zones: true
+    # new_zone_fields:
+    #   ns_group: default
+    #   soa_default_ttl: 3600
+    #   view: default
 ```
 
 ## Alias Record Update Behaviour

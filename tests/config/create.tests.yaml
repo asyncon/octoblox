@@ -1,0 +1,14 @@
+---
+a:
+  type: A
+  value: 1.2.3.4
+alias:
+  type: ALIAS
+  value: www.create.tests.
+cname:
+  type: CNAME
+  value: example2.create.tests.
+www:
+  ttl: 86400
+  type: A
+  value: 192.168.0.2

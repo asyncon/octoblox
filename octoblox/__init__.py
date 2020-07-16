@@ -65,6 +65,7 @@ class InfoBlox(requests.Session):
         dns_view=None,
         alias_types=None,
         log_change=False,
+        new_zone_fields=None,
         log=None,
     ):
         super(InfoBlox, self).__init__()
@@ -75,6 +76,7 @@ class InfoBlox(requests.Session):
         self.verify = verify
         self.apiver = apiver or '1.0'
         self.log_change = log_change
+        self.new_zone_fields = new_zone_fields or {}
         self.log = log
         if not apiver:
             self.apiver = self.get_api_version()
@@ -114,6 +116,9 @@ class InfoBlox(requests.Session):
                 **({'view': self.dns_view} if self.dns_view else {}),
             },
         ).json()
+
+    def add_zone(self, zone):
+        return self.post('zone_auth', json={'fqdn': zone, **self.new_zone_fields})
 
     def get_records(self, type, fields, zone, default_ttl, **extra):
         ret = self.get(
@@ -215,6 +220,8 @@ class InfoBloxProvider(BaseProvider):
         dns_view=None,
         alias_types=None,
         log_change=False,
+        create_zones=False,
+        new_zone_fields=None,
         *args,
         **kwargs,
     ):
@@ -228,8 +235,10 @@ class InfoBloxProvider(BaseProvider):
             dns_view,
             alias_types,
             log_change,
+            new_zone_fields,
             self.log,
         )
+        self.create_zones = create_zones
         self.log.debug(
             f'__init__: https://{username}@{endpoint}/wapi/v{self.conn.apiver}/'
         )
@@ -275,10 +284,8 @@ class InfoBloxProvider(BaseProvider):
         zone_data = self.conn.get_zone(zone.name)
 
         if not zone_data:
-            if target:
-                raise ValueError(
-                    "Zone does not exist in InfoBlox: {0}".format(zone.name)
-                )
+            if target and not self.create_zones:
+                raise ValueError(f'Zone does not exist in InfoBlox: {zone.name}')
             return False
 
         default_ttl = zone_data[0]['soa_default_ttl']
@@ -364,9 +371,12 @@ class InfoBloxProvider(BaseProvider):
         zone_data = self.conn.get_zone(zone)
 
         if not zone_data:
-            raise ValueError("Zone does not exist in InfoBlox: {0}".format(zone.name))
-
-        default_ttl = zone_data[0]['soa_default_ttl']
+            if not self.create_zones:
+                raise ValueError(f'Zone does not exist in InfoBlox: {zone}')
+            self.conn.add_zone(zone)
+            default_ttl = self.conn.new_zone_fields.get('soa_default_ttl', 3600)
+        else:
+            default_ttl = zone_data[0]['soa_default_ttl']
 
         for change in plan.changes:
             class_name = change.__class__.__name__
