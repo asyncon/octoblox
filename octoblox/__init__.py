@@ -207,7 +207,7 @@ class InfoBloxProvider(BaseProvider):
     def __init__(
         self,
         id,
-        gridmaster,
+        endpoint,
         username,
         password,
         verify=True,
@@ -220,7 +220,7 @@ class InfoBloxProvider(BaseProvider):
     ):
         self.log = logging.getLogger(f'{self.__class__.__name__}[{id}]')
         self.conn = InfoBlox(
-            gridmaster,
+            endpoint,
             username,
             password,
             verify,
@@ -231,7 +231,7 @@ class InfoBloxProvider(BaseProvider):
             self.log,
         )
         self.log.debug(
-            f'__init__: https://{username}@{gridmaster}/wapi/v{self.conn.apiver}/'
+            f'__init__: https://{username}@{endpoint}/wapi/v{self.conn.apiver}/'
         )
         super(InfoBloxProvider, self).__init__(id, *args, **kwargs)
 

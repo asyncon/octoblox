@@ -24,7 +24,7 @@ pip install octoblox
 providers:
   infoblox:
     class: octoblox.InfoBloxProvider
-    gridmaster: infoblox.example.com
+    endpoint: infoblox.example.com
     username: admin
     password: env/INFOBLOX_PASSWORD
     # verify: ./infoblox.pem
