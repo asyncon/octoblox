@@ -1,7 +1,7 @@
 import re
 import uuid
 import pytest
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
 from octoblox import InfoBloxProvider
 
 
@@ -13,6 +13,26 @@ def zone_name():
 @pytest.fixture
 def new_zone_name():
     return 'create.tests.'
+
+
+@pytest.fixture
+def new_ipv4_zone():
+    return '12.11.10.in-addr.arpa.'
+
+
+@pytest.fixture
+def new_ipv4_cidr():
+    return '10.11.12.0/24'
+
+
+@pytest.fixture
+def new_ipv6_zone():
+    return 'f.e.d.c.b.a.9.8.7.6.5.4.3.2.1.0.ip6.arpa.'
+
+
+@pytest.fixture
+def new_ipv6_cidr():
+    return '0123:4567:89ab:cdef:0000:0000:0000:0000/64'
 
 
 @pytest.fixture
@@ -39,7 +59,7 @@ def schema():
 
 
 @pytest.fixture
-def zones(zone_name, new_zone_name):
+def zones(zone_name, new_zone_name, new_ipv4_cidr, new_ipv6_cidr):
     return {
         f'/wapi/v1.0/zone_auth?fqdn={zone_name[:-1]}': [
             {
@@ -50,6 +70,8 @@ def zones(zone_name, new_zone_name):
             }
         ],
         f'/wapi/v1.0/zone_auth?fqdn={new_zone_name[:-1]}': [],
+        f'/wapi/v1.0/zone_auth?fqdn={quote_plus(new_ipv4_cidr)}': [],
+        f'/wapi/v1.0/zone_auth?fqdn={quote_plus(new_ipv6_cidr)}': [],
     }
 
 
@@ -121,7 +143,16 @@ def provider(requests_mock, zones, records, schema):
     for url, data in zones.items():
         requests_mock.get(url, json=data)
         if not data:
-            requests_mock.post(url.split('?').pop(0), status_code=201)
+            requests_mock.post(
+                url.split('?').pop(0),
+                status_code=201,
+                json={
+                    '_ref': url.replace('?fqdn=', f'/{uuid.uuid4()}:') + '/default',
+                    'fqdn': url.split('?fqdn=')[-1],
+                    'soa_default_ttl': 7200,
+                    'use_ttl': False,
+                },
+            )
     requests_mock.get(records[0], json=records[1])
     requests_mock.delete(records[0], status_code=200)
     requests_mock.post(records[0], status_code=201)

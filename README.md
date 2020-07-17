@@ -37,9 +37,13 @@ providers:
     #   - TXT
     # create_zones: true
     # new_zone_fields:
+    #   grid_primary:
+    #     - name: infoblox.example.com
     #   ns_group: default
+    #   restart_if_needed: true
     #   soa_default_ttl: 3600
     #   view: default
+    #   use_grid_zone_timer: true
 ```
 
 ## Alias Record Update Behaviour

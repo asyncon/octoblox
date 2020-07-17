@@ -107,18 +107,47 @@ class InfoBlox(requests.Session):
         vers = ([int(i) for i in v.split('.')] for v in vers)
         return '.'.join(str(i) for i in sorted(vers)[-1])
 
+    def get_zone_fqdn(self, zone):
+        if zone.endswith('in-addr.arpa.'):
+            return '{0}/{1}'.format(
+                ".".join((["0"] * 4 + zone.split("."))[-4:-8:-1]),
+                (zone.count(".") - 2) * 8,
+            )
+        elif zone.endswith('ip6.arpa.'):
+            return '{0}/{1}'.format(
+                ":".join(
+                    map(
+                        ''.join,
+                        zip(*[iter((["0"] * 32 + zone.split("."))[-4:-36:-1])] * 4),
+                    )
+                ),
+                (zone.count(".") - 2) * 4,
+            )
+        else:
+            return zone[:-1]
+
     def get_zone(self, zone):
         return self.get(
             'zone_auth',
             params={
-                'fqdn': zone.rstrip('.'),
+                'fqdn': self.get_zone_fqdn(zone),
                 '_return_fields+': 'soa_default_ttl',
                 **({'view': self.dns_view} if self.dns_view else {}),
             },
         ).json()
 
     def add_zone(self, zone):
-        return self.post('zone_auth', json={'fqdn': zone, **self.new_zone_fields})
+        fqdn = self.get_zone_fqdn(zone)
+        zone_format = 'IPV6' if ':' in fqdn else 'IPV4' if '/' in fqdn else 'FORWARDING'
+        return self.post(
+            'zone_auth',
+            json={
+                'fqdn': fqdn,
+                'zone_format': zone_format,
+                '_return_fields+': 'soa_default_ttl',
+                **self.new_zone_fields,
+            },
+        ).json()
 
     def get_records(self, type, fields, zone, default_ttl, **extra):
         ret = self.get(
@@ -366,18 +395,17 @@ class InfoBloxProvider(BaseProvider):
 
     def _apply(self, plan):
 
-        zone = plan.desired.name[:-1]
+        zone = plan.desired.name
 
         zone_data = self.conn.get_zone(zone)
 
         if not zone_data:
             if not self.create_zones:
                 raise ValueError(f'Zone does not exist in InfoBlox: {zone}')
-            self.conn.add_zone(zone)
-            default_ttl = self.conn.new_zone_fields.get('soa_default_ttl', 3600)
-        else:
-            default_ttl = zone_data[0]['soa_default_ttl']
+            zone_data = [self.conn.add_zone(zone)]
+
+        default_ttl = zone_data[0].get('soa_default_ttl', 3600)
 
         for change in plan.changes:
             class_name = change.__class__.__name__
-            getattr(self, '_apply_{}'.format(class_name))(zone, change, default_ttl)
+            getattr(self, f'_apply_{class_name}')(zone[:-1], change, default_ttl)
