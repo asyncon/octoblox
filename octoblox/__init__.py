@@ -156,7 +156,7 @@ class InfoBlox(requests.Session):
                 'zone': zone.rstrip('.'),
                 **extra,
                 '_return_fields+': ','.join(
-                    (() if type == 'NS' else ('ttl', 'use_ttl')) + fields
+                    (() if type == 'NS' else ('ttl', 'use_ttl')) + fields + ('name',)
                 ),
                 '_paging': 1,
                 '_max_results': 1000,
