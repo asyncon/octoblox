@@ -161,7 +161,7 @@ class InfoBlox(requests.Session):
                 '_paging': 1,
                 '_max_results': 1000,
                 '_return_as_object': 1,
-                **({'creator': 'STATIC'} if type == 'ALIAS' else {}),
+                **({'creator': 'STATIC'} if type != 'ALIAS' else {}),
                 **({'view': self.dns_view} if self.dns_view else {}),
             },
         ).json()
