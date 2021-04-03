@@ -60,3 +60,38 @@ in [RFC2606](https://tools.ietf.org/html/rfc2606#section-2) for this purpose.
 This will result in octoDNS reporting that the value is incorrect when the
 reality is that the number of ALIAS records is incorrect. While it is possible
 that both are the case this is unlikely and OctoBlox can handle this as well.
+
+### Use of Lenient Flag for Alias Records
+
+OctoDNS has implemented a behavior of not accepting alias records for non-root
+zone entries by default. To get around this provide the `--lenient` flag when
+dumping from InfoBlox with alias records.
+
+When storing alias entries in YAML ensure that you add the octodns lenient
+entry to the record like so:
+
+```yaml
+---
+alias:
+  octodns:
+    lenient: true
+  type: ALIAS
+  value: www.example.com.
+```
+
+Alternatively you can set a zone level lenient flag like so:
+
+```yaml
+---
+example.com.:
+    octodns:
+      lenient: true
+    sources:
+    - yaml
+    targets:
+    - infoblox
+```
+
+Refer to the [octoDNS entry on lenience][lenience] for more information.
+
+[lenience]: https://github.com/octodns/octodns/blob/master/docs/records.md#lenience

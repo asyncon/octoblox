@@ -11,7 +11,7 @@ def test_zone_data(provider, zone_name):
     source = YamlProvider('test', os.path.join(os.path.dirname(__file__), 'config'))
     source.populate(expected)
     zone = Zone(zone_name, [])
-    provider.populate(zone)
+    provider.populate(zone, lenient=True)
     assert len(zone.records) == 5
     plan = provider.plan(expected)
     provider.apply(plan)

@@ -8,7 +8,7 @@ pytest = "*"
 pytest-cov = "*"
 requests-mock = "*"
 octoblox = {editable = true, path = "."}
-black = "*"
+black = ">=20.8b1"
 flake8 = "*"
 flake8-bugbear = "*"
 
@@ -16,8 +16,6 @@ flake8-bugbear = "*"
 requests = "*"
 octodns = "*"
 
-[requires]
-python_version = "3.8"
-
-[pipenv]
-allow_prereleases = true
+[scripts]
+setup = "pipenv install --dev --skip-lock"
+clean = "rm -rf .pytest_cache .venv build dist .tox octoblox.egg-info tests/__pycache__ .coverage Pipfile.lock"

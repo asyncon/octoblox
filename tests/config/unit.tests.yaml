@@ -4,9 +4,13 @@ a:
   type: A
   value: 1.2.3.4
 alias:
+  octodns:
+    lenient: true
   type: ALIAS
   value: www.unit.tests.
 alias-update:
+  octodns:
+    lenient: true
   ttl: 28800
   type: ALIAS
   value: www.unit.tests.

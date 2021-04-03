@@ -3,6 +3,8 @@ a:
   type: A
   value: 1.2.3.4
 alias:
+  octodns:
+    lenient: true
   type: ALIAS
   value: www.create.tests.
 cname:
