@@ -213,7 +213,7 @@ class InfoBlox(requests.Session):
                     for vk, k in spec.items()
                 }
             ),
-            **({} if type == 'NS' else {'use_ttl': ttl != default_ttl, 'ttl': ttl,}),
+            **({} if type == 'NS' else {'use_ttl': ttl != default_ttl, 'ttl': ttl}),
         }
 
     def add_record(self, type, zone, name, value, ttl, default_ttl):
@@ -361,7 +361,7 @@ class InfoBloxProvider(BaseProvider):
         type = new._type
         update = ext.ttl != new.ttl
         values = [new.value] if type in single_types else new.values
-        evalues = [ext.value,] if type in single_types else ext.values
+        evalues = [ext.value] if type in single_types else ext.values
         for value in values:
             if type == 'ALIAS':
                 spec = type_map[type]

@@ -2,9 +2,9 @@
 
 Infoblox provider for [octoDNS](https://github.com/github/octodns)
 
-[![PyPI](https://img.shields.io/pypi/v/octoblox.svg)](https://pypi.org/project/octoblox/)
+[![CI](https://github.com/asyncon/octoblox/actions/workflows/ci.yml/badge.svg)](https://github.com/asyncon/octoblox/actions/workflows/ci.yml)
 [![MIT](https://img.shields.io/pypi/l/octoblox.svg)](https://github.com/asyncon/octoblox/blob/master/LICENSE)
-[![Travis (.org)](https://img.shields.io/travis/asyncon/octoblox)](https://travis-ci.org/projects/asyncon/octoblox)
+[![PyPI](https://img.shields.io/pypi/v/octoblox.svg)](https://pypi.org/project/octoblox/)
 [![Python](https://img.shields.io/pypi/pyversions/octoblox.svg)](https://pypi.org/project/octoblox/)
 [![Downloads](https://pepy.tech/badge/octoblox)](https://pepy.tech/project/octoblox)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
