@@ -28,6 +28,29 @@ def test_zone_creation(provider, new_zone_name):
     provider.apply(plan)
 
 
+def test_empty_zone_creation(provider, empty_zone_name):
+    expected = Zone(empty_zone_name, [])
+    source = YamlProvider('test', os.path.join(os.path.dirname(__file__), 'config'))
+    source.populate(expected)
+    assert len(expected.records) == 0
+    zone = Zone(empty_zone_name, [])
+    provider.populate(zone)
+    plan = provider.plan(expected)
+    provider.apply(plan)
+
+
+def test_delegated_zone_creation(provider, empty_zone_name):
+    provider.conn.zone_type = 'zone_delegated'
+    expected = Zone(empty_zone_name, [])
+    source = YamlProvider('test', os.path.join(os.path.dirname(__file__), 'config'))
+    source.populate(expected)
+    assert len(expected.records) == 0
+    zone = Zone(empty_zone_name, [])
+    provider.populate(zone)
+    plan = provider.plan(expected)
+    provider.apply(plan)
+
+
 def test_ipv4_zone(provider, new_ipv4_zone):
     expected = Zone(new_ipv4_zone, [])
     source = YamlProvider('test', os.path.join(os.path.dirname(__file__), 'config'))

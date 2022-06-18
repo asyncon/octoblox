@@ -3,7 +3,7 @@ import requests
 from collections import defaultdict
 from functools import lru_cache
 from octodns.provider.base import BaseProvider
-from octodns.record import Record
+from octodns.record import Change, Record
 
 # fmt: off
 single_types = {'ALIAS', 'CNAME', 'PTR'}
@@ -52,6 +52,19 @@ type_map = {
 # fmt: on
 
 
+class Create(Change):
+    """Create Zone Change"""
+
+    CLASS_ORDERING = 0
+
+    def __init__(self, new):
+        super().__init__(None, new)
+
+    def __repr__(self, leader=''):
+        source = self.new.source.id if self.new.source else ''
+        return f'Create Zone {self.new.fqdn} ({source})'
+
+
 class InfoBlox(requests.Session):
     """Encapsulates all traffic with the InfoBlox WAPI"""
 
@@ -67,6 +80,7 @@ class InfoBlox(requests.Session):
         log_change=False,
         new_zone_fields=None,
         log=None,
+        zone_type='zone_auth',
     ):
         super(InfoBlox, self).__init__()
         self.fqdn = fqdn
@@ -78,7 +92,8 @@ class InfoBlox(requests.Session):
         self.log_change = log_change
         self.new_zone_fields = new_zone_fields or {}
         self.log = log
-        if not apiver:
+        self.zone_type = zone_type or 'zone_auth'
+        if not apiver:  # pragma: no branch
             self.apiver = self.get_api_version()
 
     def url(self, url):
@@ -90,7 +105,7 @@ class InfoBlox(requests.Session):
         ret = super().request(method, self.url(url), **kwargs)
         try:
             ret.raise_for_status()
-        except requests.HTTPError:
+        except requests.HTTPError:  # pragma: no cover
             self.log.error(
                 'InfoBlox.request: %d %s %s %r %s',
                 ret.status_code,
@@ -128,7 +143,7 @@ class InfoBlox(requests.Session):
 
     def get_zone(self, zone):
         return self.get(
-            'zone_auth',
+            self.zone_type,
             params={
                 'fqdn': self.get_zone_fqdn(zone),
                 '_return_fields+': 'soa_default_ttl',
@@ -140,7 +155,7 @@ class InfoBlox(requests.Session):
         fqdn = self.get_zone_fqdn(zone)
         zone_format = 'IPV6' if ':' in fqdn else 'IPV4' if '/' in fqdn else 'FORWARDING'
         return self.post(
-            'zone_auth',
+            self.zone_type,
             json={
                 'fqdn': fqdn,
                 'zone_format': zone_format,
@@ -166,7 +181,7 @@ class InfoBlox(requests.Session):
             },
         ).json()
         data = ret['result']
-        while 'next_page_id' in ret:
+        while 'next_page_id' in ret:  # pragma: no cover
             ret = self.get(
                 'record:{0}'.format(type.lower()),
                 params={'_page_id': ret['next_page_id']},
@@ -252,6 +267,7 @@ class InfoBloxProvider(BaseProvider):
         log_change=False,
         create_zones=False,
         new_zone_fields=None,
+        zone_type='zone_auth',
         *args,
         **kwargs,
     ):
@@ -267,6 +283,7 @@ class InfoBloxProvider(BaseProvider):
             log_change,
             new_zone_fields,
             self.log,
+            zone_type,
         )
         self.create_zones = create_zones
         self.log.debug(
@@ -313,8 +330,10 @@ class InfoBloxProvider(BaseProvider):
 
         zone_data = self.conn.get_zone(zone.name)
 
+        zone.exists = bool(zone_data)
+
         if not zone_data:
-            if target and not self.create_zones:
+            if target and not self.create_zones:  # pragma: no cover
                 raise ValueError(f'Zone does not exist in InfoBlox: {zone.name}')
             return False
 
@@ -338,6 +357,24 @@ class InfoBloxProvider(BaseProvider):
                 zone.add_record(record, lenient=lenient)
 
         return True
+
+    def _extra_changes(self, existing, changes, **kwargs):
+        if self.create_zones and not existing.exists and not changes:
+            return [
+                Create(
+                    Record.new(
+                        existing,
+                        '',
+                        {
+                            'type': 'NS',
+                            'ttl': 3600,
+                            'values': [existing.name + 'invalid.'],
+                        },
+                        source=self,
+                    )
+                )
+            ]
+        return []
 
     def _apply_Create(self, zone, change, default_ttl):
         new = change.new
@@ -370,7 +407,7 @@ class InfoBloxProvider(BaseProvider):
                     v = {spec[0]: value[:-1], spec[1]: t}
                     self.conn.add_record(type, zone, new.name, v, new.ttl, default_ttl)
                 for t in self.conn.alias_types & {*refs}:
-                    if refs[t][spec[0]] != value:
+                    if refs[t][spec[0]] != value:  # pragma: no branch
                         v = {spec[0]: value[:-1], spec[1]: t}
                         self.conn.mod_record(type, refs[t], v, new.ttl, default_ttl)
                 self.conn.del_record(
@@ -379,7 +416,7 @@ class InfoBloxProvider(BaseProvider):
             elif type in single_types:
                 self.conn.mod_record(type, ext.refs[0], value, new.ttl, default_ttl)
             elif value in evalues:
-                if update:
+                if update:  # pragma: no branch
                     self.conn.mod_record(
                         type,
                         ext.refs[evalues.index(value)],
@@ -387,7 +424,7 @@ class InfoBloxProvider(BaseProvider):
                         new.ttl,
                         default_ttl,
                     )
-            else:
+            else:  # pragma: no cover
                 self.conn.add_record(type, zone, new.name, value, new.ttl, default_ttl)
         if type not in single_types:
             self.conn.del_record(
@@ -401,12 +438,14 @@ class InfoBloxProvider(BaseProvider):
         zone_data = self.conn.get_zone(zone)
 
         if not zone_data:
-            if not self.create_zones:
+            if not self.create_zones:  # pragma: no cover
                 raise ValueError(f'Zone does not exist in InfoBlox: {zone}')
             zone_data = [self.conn.add_zone(zone)]
 
         default_ttl = zone_data[0].get('soa_default_ttl', 3600)
 
         for change in plan.changes:
+            if isinstance(change, Create):
+                continue
             class_name = change.__class__.__name__
             getattr(self, f'_apply_{class_name}')(zone[:-1], change, default_ttl)

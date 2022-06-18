@@ -44,6 +44,7 @@ providers:
     #   soa_default_ttl: 3600
     #   view: default
     #   use_grid_zone_timer: true
+    # zone_type: zone_delegated
 ```
 
 ## Alias Record Update Behaviour

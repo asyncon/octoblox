@@ -16,6 +16,11 @@ def new_zone_name():
 
 
 @pytest.fixture
+def empty_zone_name():
+    return 'empty.tests.'
+
+
+@pytest.fixture
 def new_ipv4_zone():
     return '12.11.10.in-addr.arpa.'
 
@@ -59,7 +64,7 @@ def schema():
 
 
 @pytest.fixture
-def zones(zone_name, new_zone_name, new_ipv4_cidr, new_ipv6_cidr):
+def zones(zone_name, new_zone_name, empty_zone_name, new_ipv4_cidr, new_ipv6_cidr):
     return {
         f'/wapi/v1.0/zone_auth?fqdn={zone_name[:-1]}': [
             {
@@ -70,6 +75,8 @@ def zones(zone_name, new_zone_name, new_ipv4_cidr, new_ipv6_cidr):
             }
         ],
         f'/wapi/v1.0/zone_auth?fqdn={new_zone_name[:-1]}': [],
+        f'/wapi/v1.0/zone_auth?fqdn={empty_zone_name[:-1]}': [],
+        f'/wapi/v1.0/zone_delegated?fqdn={empty_zone_name[:-1]}': [],
         f'/wapi/v1.0/zone_auth?fqdn={quote_plus(new_ipv4_cidr)}': [],
         f'/wapi/v1.0/zone_auth?fqdn={quote_plus(new_ipv6_cidr)}': [],
     }
