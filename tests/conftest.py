@@ -2,7 +2,7 @@ import re
 import uuid
 import pytest
 from urllib.parse import urlparse, quote_plus
-from octoblox import InfoBloxProvider
+from octoblox import InfoBloxProvider, DelegatedProvider
 
 
 @pytest.fixture
@@ -76,9 +76,20 @@ def zones(zone_name, new_zone_name, empty_zone_name, new_ipv4_cidr, new_ipv6_cid
         ],
         f'/wapi/v1.0/zone_auth?fqdn={new_zone_name[:-1]}': [],
         f'/wapi/v1.0/zone_auth?fqdn={empty_zone_name[:-1]}': [],
-        f'/wapi/v1.0/zone_delegated?fqdn={empty_zone_name[:-1]}': [],
         f'/wapi/v1.0/zone_auth?fqdn={quote_plus(new_ipv4_cidr)}': [],
         f'/wapi/v1.0/zone_auth?fqdn={quote_plus(new_ipv6_cidr)}': [],
+        f'/wapi/v1.0/zone_delegated?fqdn={zone_name[:-1]}': [
+            {
+                '_ref': f'zone_delegated/{uuid.uuid4()}:{zone_name[:-1]}/default',
+                'fqdn': zone_name[:-1],
+                'view': 'default',
+                'delegated_ttl': 28800,
+            }
+        ],
+        f'/wapi/v1.0/zone_delegated?fqdn={new_zone_name[:-1]}': [],
+        f'/wapi/v1.0/zone_delegated?fqdn={empty_zone_name[:-1]}': [],
+        f'/wapi/v1.0/zone_delegated?fqdn={quote_plus(new_ipv4_cidr)}': [],
+        f'/wapi/v1.0/zone_delegated?fqdn={quote_plus(new_ipv6_cidr)}': [],
     }
 
 
@@ -144,8 +155,7 @@ def records(zone_name):
     return (re.compile('/wapi/v1.0/record:\\w+([?/]|$)'), get_records(zone_name[:-1]))
 
 
-@pytest.fixture
-def provider(requests_mock, zones, records, schema):
+def make_provider(cls, requests_mock, zones, records, schema):
     requests_mock.get(schema[0], json=schema[1])
     for url, data in zones.items():
         requests_mock.get(url, json=data)
@@ -164,7 +174,7 @@ def provider(requests_mock, zones, records, schema):
     requests_mock.delete(records[0], status_code=200)
     requests_mock.post(records[0], status_code=201)
     requests_mock.put(records[0], status_code=200)
-    return InfoBloxProvider(
+    return cls(
         'test',
         'non.existent',
         'username',
@@ -172,3 +182,13 @@ def provider(requests_mock, zones, records, schema):
         log_change=True,
         create_zones=True,
     )
+
+
+@pytest.fixture
+def provider(requests_mock, zones, records, schema):
+    return make_provider(InfoBloxProvider, requests_mock, zones, records, schema)
+
+
+@pytest.fixture
+def delegated_provider(requests_mock, zones, records, schema):
+    return make_provider(DelegatedProvider, requests_mock, zones, records, schema)

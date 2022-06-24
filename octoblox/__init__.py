@@ -80,7 +80,6 @@ class InfoBlox(requests.Session):
         log_change=False,
         new_zone_fields=None,
         log=None,
-        zone_type='zone_auth',
     ):
         super(InfoBlox, self).__init__()
         self.fqdn = fqdn
@@ -92,7 +91,6 @@ class InfoBlox(requests.Session):
         self.log_change = log_change
         self.new_zone_fields = new_zone_fields or {}
         self.log = log
-        self.zone_type = zone_type or 'zone_auth'
         if not apiver:  # pragma: no branch
             self.apiver = self.get_api_version()
 
@@ -141,25 +139,25 @@ class InfoBlox(requests.Session):
         else:
             return zone[:-1]
 
-    def get_zone(self, zone):
+    def get_zone(self, zone, zone_type='zone_auth', return_fields='soa_default_ttl'):
         return self.get(
-            self.zone_type,
+            zone_type,
             params={
                 'fqdn': self.get_zone_fqdn(zone),
-                '_return_fields+': 'soa_default_ttl',
+                '_return_fields+': return_fields,
                 **({'view': self.dns_view} if self.dns_view else {}),
             },
         ).json()
 
-    def add_zone(self, zone):
+    def add_zone(self, zone, zone_type='zone_auth', return_fields='soa_default_ttl'):
         fqdn = self.get_zone_fqdn(zone)
-        zone_format = 'IPV6' if ':' in fqdn else 'IPV4' if '/' in fqdn else 'FORWARDING'
+        zone_format = 'IPV6' if ':' in fqdn else 'IPV4' if '/' in fqdn else 'FORWARD'
         return self.post(
-            self.zone_type,
+            zone_type,
             json={
                 'fqdn': fqdn,
                 'zone_format': zone_format,
-                '_return_fields+': 'soa_default_ttl',
+                '_return_fields+': return_fields,
                 **self.new_zone_fields,
             },
         ).json()
@@ -267,7 +265,6 @@ class InfoBloxProvider(BaseProvider):
         log_change=False,
         create_zones=False,
         new_zone_fields=None,
-        zone_type='zone_auth',
         *args,
         **kwargs,
     ):
@@ -283,7 +280,6 @@ class InfoBloxProvider(BaseProvider):
             log_change,
             new_zone_fields,
             self.log,
-            zone_type,
         )
         self.create_zones = create_zones
         self.log.debug(
@@ -449,3 +445,32 @@ class InfoBloxProvider(BaseProvider):
                 continue
             class_name = change.__class__.__name__
             getattr(self, f'_apply_{class_name}')(zone[:-1], change, default_ttl)
+
+
+class DelegatedProvider(InfoBloxProvider):
+    def populate(self, zone, target=False, lenient=False):
+        self.log.debug(
+            'populate: name=%s, target=%s, lenient=%s', zone.name, target, lenient
+        )
+
+        zone_data = self.conn.get_zone(zone.name, 'zone_delegated', 'delegated_ttl')
+
+        zone.exists = bool(zone_data)
+
+        if not zone_data:
+            if target and not self.create_zones:  # pragma: no cover
+                raise ValueError(f'Zone does not exist in InfoBlox: {zone.name}')
+            return False
+
+        return True
+
+    def _apply(self, plan):
+
+        zone = plan.desired.name
+
+        zone_data = self.conn.get_zone(zone, 'zone_delegated', 'delegated_ttl')
+
+        if not zone_data:
+            if not self.create_zones:  # pragma: no cover
+                raise ValueError(f'Zone does not exist in InfoBlox: {zone}')
+            self.conn.add_zone(zone, 'zone_delegated', 'delegated_ttl')

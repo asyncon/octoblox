@@ -1,0 +1,23 @@
+---
+a:
+  ttl: 28800
+  type: A
+  value: 1.2.3.4
+alias:
+  octodns:
+    lenient: true
+  type: ALIAS
+  value: www.unit.tests.
+alias-update:
+  octodns:
+    lenient: true
+  ttl: 28800
+  type: ALIAS
+  value: www.unit.tests.
+cname:
+  ttl: 28800
+  type: CNAME
+  value: example2.unit.tests.
+www:
+  type: A
+  value: 192.168.0.2

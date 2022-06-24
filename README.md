@@ -44,7 +44,24 @@ providers:
     #   soa_default_ttl: 3600
     #   view: default
     #   use_grid_zone_timer: true
-    # zone_type: zone_delegated
+  delegated:
+    class: octoblox.DelegatedProvider
+    endpoint: infoblox.example.com
+    username: admin
+    password: env/INFOBLOX_PASSWORD
+    # verify: ./infoblox.pem
+    # apiver: 1.0
+    # dns_view: default
+    # log_change: true
+    # create_zones: true
+    # new_zone_fields:
+    #   delegate_to:
+    #     - name: ns1.delegated.example.com
+    #       address: 1.1.1.1
+    #     - name: ns2.delegated.example.com
+    #       address: 8.8.8.8
+    #   ns_group: default
+    #   view: default
 ```
 
 ## Alias Record Update Behaviour
