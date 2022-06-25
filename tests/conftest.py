@@ -1,8 +1,12 @@
 import re
 import uuid
+import logging
+
 import pytest
 from urllib.parse import urlparse, quote_plus
 from octoblox import InfoBloxProvider, DelegatedProvider
+
+logging.basicConfig(level='DEBUG')
 
 
 @pytest.fixture

@@ -3,6 +3,7 @@ import requests
 from collections import defaultdict
 from functools import lru_cache
 from octodns.provider.base import BaseProvider
+from octodns.source.base import BaseSource
 from octodns.record import Change, Record
 
 # fmt: off
@@ -355,6 +356,9 @@ class InfoBloxProvider(BaseProvider):
         return True
 
     def _extra_changes(self, existing, changes, **kwargs):
+        self.log.debug(
+            '_extra_changes: zone=%s, len(changes)=%d', existing.name, len(changes)
+        )
         if self.create_zones and not existing.exists and not changes:
             return [
                 Create(
@@ -474,3 +478,27 @@ class DelegatedProvider(InfoBloxProvider):
             if not self.create_zones:  # pragma: no cover
                 raise ValueError(f'Zone does not exist in InfoBlox: {zone}')
             self.conn.add_zone(zone, 'zone_delegated', 'delegated_ttl')
+
+
+class EmptySource(BaseSource):
+    """docstring for EmptySource"""
+
+    SUPPORTS = {'NS'}
+    SUPPORTS_GEO = False
+    SUPPORTS_DYNAMIC = False
+    SUPPORTS_ROOT_NS = True
+
+    def __init__(self, id, *args, **kwargs):
+        self.log = logging.getLogger(f'{self.__class__.__name__}[{id}]')
+        self.log.debug('__init__')
+        super().__init__(id, *args, **kwargs)
+
+    def populate(self, zone, target=False, lenient=False):
+        self.log.debug(
+            'populate: name=%s, target=%s, lenient=%s, len(records)=%d',
+            zone.name,
+            target,
+            lenient,
+            len(zone.records),
+        )
+        return True
